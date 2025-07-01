@@ -1,0 +1,9 @@
+@startuml
+hide empty member
+
+class IncludedDiagram {
+    + process(): void
+    + render(): string
+}
+
+@enduml
