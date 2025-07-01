@@ -8,7 +8,8 @@ const DEFAULT_OPTIONS = {
   outputFormat: "png", // "png" or "svg"
   outputDir: "./static", // Directory to store generated images
   inlineSvg: true, // Whether to inline SVG content
-  includePath: "./" // Base path for resolving included .puml files
+  includePath: "./", // Base path for resolving included .puml files
+  urlPrefix: "/" // URL prefix to replace "./" in generated image URLs
 };
 
 /**
@@ -71,12 +72,12 @@ async function processIncludes(plantumlCode, basePath) {
 }
 
 /**
- * Saves image data to file and returns the file path
+ * Saves image data to file and returns the filename
  * @param {Buffer} imageData - Image data as buffer
  * @param {string} outputDir - Output directory
  * @param {string} format - Image format (png/svg)
  * @param {string} encodedCode - Encoded PlantUML code for filename
- * @returns {Promise<string>} - File path
+ * @returns {Promise<string>} - Filename only
  */
 async function saveImageToFile(imageData, outputDir, format, encodedCode) {
   await fs.ensureDir(outputDir);
@@ -84,8 +85,7 @@ async function saveImageToFile(imageData, outputDir, format, encodedCode) {
   const filePath = path.join(outputDir, filename);
   await fs.writeFile(filePath, imageData);
   console.log(`📁 PlantUML diagram saved: ${filePath} (${(imageData.length / 1024).toFixed(1)} KB)`);
-  // Return a relative path with leading './' for markdown compatibility
-  return `./${path.join(outputDir, filename)}`;
+  return filename;
 }
 
 /**
@@ -135,12 +135,16 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
           } else {
             // Save to file and create image node
             const encoded = plantumlEncoder.encode(processedCode);
-            const filePath = await saveImageToFile(imageData, options.outputDir, options.outputFormat, encoded);
+            const filename = await saveImageToFile(imageData, options.outputDir, options.outputFormat, encoded);
 
-            // Create image node directly (no paragraph wrapper needed for remark-rehype)
+            // Construct the URL as urlPrefix + filename, ensuring no double slashes
+            let url = options.urlPrefix.endsWith("/") ? options.urlPrefix : options.urlPrefix + "/";
+            url += filename;
+            url = url.replace(/\/\/+/, "/"); // Replace any double slashes with a single slash
+
             const imageNode = {
               type: "image",
-              url: filePath.startsWith("./") ? filePath.replace(/^\./, "") : filePath,
+              url,
               alt: meta,
               title: meta
             };
@@ -162,9 +166,7 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
                 type: "link",
                 url: imageUrl,
                 title: meta,
-                children: [
-                  { type: "text", value: meta || "PlantUML diagram" }
-                ]
+                children: [{ type: "text", value: meta || "PlantUML diagram" }]
               }
             ]
           };

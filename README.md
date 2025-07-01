@@ -61,7 +61,8 @@ const options = {
   outputFormat: "png", // "png" or "svg"
   outputDir: "./static", // Directory to store generated images
   inlineSvg: true, // Whether to inline SVG content (only applies when outputFormat is "svg")
-  includePath: "./" // Base path for resolving included .puml files
+  includePath: "./", // Base path for resolving included .puml files
+  urlPrefix: "/" // URL prefix to replace "./" in generated image URLs
 };
 
 remark().use(simplePlantUML, options).process(input);
@@ -74,6 +75,26 @@ remark().use(simplePlantUML, options).process(input);
 - **outputDir**: Directory where generated images will be stored (default: `"./static"`)
 - **inlineSvg**: When `outputFormat` is `"svg"`, whether to inline the SVG content in HTML or save as files (default: `true`)
 - **includePath**: Base path for resolving `!include` directives in PlantUML code (default: `"./"`)
+- **urlPrefix**: URL prefix to replace `"./"` in generated image URLs (default: `"/"`)
+
+### Example: Customizing the Public URL for Images
+
+If your static files are served from a different public path than where they are generated, use `urlPrefix`:
+
+```js
+const options = {
+  outputDir: "./static/diagrams", // Where files are saved
+  urlPrefix: "/assets/diagrams/", // How files are referenced in HTML
+  outputFormat: "png"
+};
+
+remark().use(plantumlLocal, options).process(input);
+```
+
+This will save images to `./static/diagrams/plantuml-xxxx.png` and reference them as `/assets/diagrams/plantuml-xxxx.png` in your HTML output.
+
+- By default, `urlPrefix` is `/`, so images will be referenced from the web root (e.g., `/plantuml-xxxx.png`).
+- No double slashes or directory leaks will occur in the generated URLs.
 
 ## Features
 

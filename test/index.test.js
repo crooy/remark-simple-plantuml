@@ -1,14 +1,14 @@
 const chai = require("chai");
 const fs = require("fs");
 const path = require("path");
-const { unified } = require('unified');
-const { remark } = require('remark');
-const remarkParse = require('remark-parse').default;
-const remarkRehype = require('remark-rehype').default;
-const html = require('rehype-stringify').default;
+const { unified } = require("unified");
+const { remark } = require("remark");
+const remarkParse = require("remark-parse").default;
+const remarkRehype = require("remark-rehype").default;
+const html = require("rehype-stringify").default;
 const plugin = require("../index");
 const plantumlEncoder = require("plantuml-encoder");
-const proxyquire = require('proxyquire');
+const proxyquire = require("proxyquire");
 
 // Minimal test plugin to verify unified pipeline works
 function minimalTestPlugin() {
@@ -60,7 +60,7 @@ describe("Plugin", () => {
 
   it("should convert PlantUML code to inline SVG", async () => {
     // Mock fetch to return a fake SVG buffer
-    const fakeSvg = Buffer.from('<svg><rect width="100" height="100"/></svg>', 'utf8');
+    const fakeSvg = Buffer.from('<svg><rect width="100" height="100"/></svg>', "utf8");
     const fetchImpl = async () => ({ ok: true, buffer: async () => fakeSvg });
 
     const input = fs.readFileSync(path.resolve(__dirname, "./resources/source.md")).toString();
@@ -180,7 +180,9 @@ describe("Plugin", () => {
 
   it("should handle errors gracefully and keep original code blocks", async () => {
     // Mock fetch to always throw
-    const fetchImpl = async () => { throw new Error("Simulated network error"); };
+    const fetchImpl = async () => {
+      throw new Error("Simulated network error");
+    };
 
     const input = "```plantuml\ninvalid plantuml code\n```";
 
@@ -198,9 +200,9 @@ describe("Plugin", () => {
         })
         .process(input);
 
-          // Should output a fallback link if processing fails
-    chai.assert.include(output.toString(), "PlantUML diagram");
-    chai.assert.include(output.toString(), "https://www.plantuml.com/plantuml/png/");
+      // Should output a fallback link if processing fails
+      chai.assert.include(output.toString(), "PlantUML diagram");
+      chai.assert.include(output.toString(), "https://www.plantuml.com/plantuml/png/");
     } finally {
       // Restore console.error
       console.error = originalConsoleError;
@@ -209,14 +211,10 @@ describe("Plugin", () => {
 
   it("should fallback to PlantUML image link if server is unavailable", async () => {
     // Mock fetch to always throw
-    const fetchImpl = async () => { throw new Error("Simulated network error"); };
-    const testInput = [
-      "```plantuml",
-      "class FallbackTest {",
-      "  + fallback(): void",
-      "}",
-      "```"
-    ].join("\n");
+    const fetchImpl = async () => {
+      throw new Error("Simulated network error");
+    };
+    const testInput = ["```plantuml", "class FallbackTest {", "  + fallback(): void", "}", "```"].join("\n");
 
     const output = await unified()
       .use(remarkParse)
@@ -238,5 +236,59 @@ describe("Plugin", () => {
     const fallbackUrl = match[1];
     chai.assert.isString(fallbackUrl);
     chai.assert.isAbove(fallbackUrl.length, 10, "Encoded PlantUML string should be present in fallback URL");
+  });
+
+  it("should use custom urlPrefix in generated image URLs", async () => {
+    // Mock fetch to return a PNG buffer
+    const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const fetchImpl = async () => ({ ok: true, buffer: async () => fakePng });
+
+    const input = ["```plantuml", "class UrlPrefixTest {", "  + test(): void", "}", "```"].join("\n");
+
+    const output = await unified()
+      .use(remarkParse)
+      .use(plugin, {
+        outputFormat: "png",
+        outputDir: "./test/static",
+        inlineSvg: false,
+        urlPrefix: "/assets/images/",
+        fetch: fetchImpl
+      })
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(html, { allowDangerousHtml: true })
+      .process(input);
+
+    const htmlOutput = output.toString();
+
+    // Should contain the custom urlPrefix in the image src
+    chai.assert.include(htmlOutput, 'src="/assets/images/', "HTML output should contain the custom urlPrefix");
+    chai.assert.include(htmlOutput, "plantuml-", "HTML output should contain the generated PNG filename");
+  });
+
+  it("should use default urlPrefix when not specified", async () => {
+    // Mock fetch to return a PNG buffer
+    const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const fetchImpl = async () => ({ ok: true, buffer: async () => fakePng });
+
+    const input = ["```plantuml", "class DefaultPrefixTest {", "  + test(): void", "}", "```"].join("\n");
+
+    const output = await unified()
+      .use(remarkParse)
+      .use(plugin, {
+        outputFormat: "png",
+        outputDir: "./test/static",
+        inlineSvg: false,
+        fetch: fetchImpl
+      })
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(html, { allowDangerousHtml: true })
+      .process(input);
+
+    const htmlOutput = output.toString();
+
+    // Should contain the default urlPrefix (/) in the image src
+    chai.assert.include(htmlOutput, 'src="/', "HTML output should contain the default urlPrefix");
+    chai.assert.notInclude(htmlOutput, 'src="//', "HTML output should not have double slashes");
+    chai.assert.include(htmlOutput, "plantuml-", "HTML output should contain the generated PNG filename");
   });
 });
