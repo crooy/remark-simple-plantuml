@@ -291,4 +291,51 @@ describe("Plugin", () => {
     chai.assert.notInclude(htmlOutput, 'src="//', "HTML output should not have double slashes");
     chai.assert.include(htmlOutput, "plantuml-", "HTML output should contain the generated PNG filename");
   });
+
+  it("should use cache for duplicate PlantUML diagrams", async () => {
+    // Mock fetch to return a PNG buffer
+    const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const fetchImpl = async () => ({ ok: true, buffer: async () => fakePng });
+
+    const plantumlCode = "class CacheTest { + test(): void }";
+    const input = ["```plantuml", plantumlCode, "```"].join("\n");
+
+    // First run - should save the file
+    const output1 = await unified()
+      .use(remarkParse)
+      .use(plugin, {
+        outputFormat: "png",
+        outputDir: "./test/static",
+        inlineSvg: false,
+        fetch: fetchImpl
+      })
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(html, { allowDangerousHtml: true })
+      .process(input);
+
+    // Second run with same code - should use cache
+    const output2 = await unified()
+      .use(remarkParse)
+      .use(plugin, {
+        outputFormat: "png",
+        outputDir: "./test/static",
+        inlineSvg: false,
+        fetch: fetchImpl
+      })
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(html, { allowDangerousHtml: true })
+      .process(input);
+
+    const htmlOutput1 = output1.toString();
+    const htmlOutput2 = output2.toString();
+
+    // Both should contain the same image URL
+    const urlMatch1 = htmlOutput1.match(/src="([^"]+)"/);
+    const urlMatch2 = htmlOutput2.match(/src="([^"]+)"/);
+
+    chai.assert(urlMatch1, "First output should contain image URL");
+    chai.assert(urlMatch2, "Second output should contain image URL");
+    chai.assert.equal(urlMatch1[1], urlMatch2[1], "Both outputs should have the same image URL");
+    chai.assert.include(urlMatch1[1], "plantuml-", "URL should contain plantuml- prefix");
+  });
 });

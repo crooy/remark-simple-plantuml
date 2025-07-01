@@ -1,6 +1,6 @@
 {
   "name": "remark-plantuml-local",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "`remark-plantuml-local` is a plugin for [remarkjs](https://github.com/remarkjs/remark) that converts PlantUML code blocks to local image files with support for including .puml files.",
   "main": "./index.js",
   "scripts": {

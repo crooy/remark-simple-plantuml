@@ -115,50 +115,10 @@ class MyClass {
 
 Instead of using external PlantUML URLs, the plugin fetches the generated images and stores them locally in the specified `outputDir`.
 
+**Filenames are based on a SHA-256 hash of the PlantUML code**, ensuring that each unique diagram gets a unique filename. This also means that if you use the same diagram code in multiple places, the image will only be generated and stored once.
+
+**Built-in caching:** Before writing a file, the plugin checks if it already exists. If so, it reuses the existing file and does not regenerate or duplicate the image on disk.
+
 ### Inline SVG Support
 
-When using SVG format with `inlineSvg: true`, the plugin embeds the SVG content directly in the HTML output:
-
-```html
-<div class="plantuml-diagram">
-  <svg>...</svg>
-</div>
-```
-
-## Integration
-
-You can use this plugin in any frameworks support remarkjs.
-
-If you want to use in the classic preset of [Docusaurus 2](https://v2.docusaurus.io/), like me, set configuration in your `docusaurus.config.js` like following.
-
-```javascript
-const plantumlLocal = require("remark-plantuml-local");
-
-// your configurations...
-
-presets: [
-    [
-      "@docusaurus/preset-classic",
-      {
-        docs: {
-          sidebarPath: require.resolve("./sidebars.js"),
-          remarkPlugins: [[plantumlLocal, {
-            outputFormat: "svg",
-            inlineSvg: true,
-            outputDir: "./static/diagrams"
-          }]]
-        }
-      }
-    ]
-  ],
-
-//...
-```
-
-## GitLab Compatibility
-
-This plugin follows the [GitLab PlantUML specification](https://docs.gitlab.com/administration/integration/plantuml/) for the most part, supporting:
-
-- PlantUML code blocks in markdown
-- Include directives for `.puml` files
-- Various output formats (PNG/SVG)
+When using SVG format with `

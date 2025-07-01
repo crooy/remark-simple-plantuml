@@ -2,6 +2,7 @@ const visit = require("unist-util-visit");
 const plantumlEncoder = require("plantuml-encoder");
 const fs = require("fs-extra");
 const path = require("path");
+const crypto = require("crypto");
 
 const DEFAULT_OPTIONS = {
   baseUrl: "https://www.plantuml.com/plantuml",
@@ -72,17 +73,37 @@ async function processIncludes(plantumlCode, basePath) {
 }
 
 /**
+ * Generates a SHA-256 hash from PlantUML code
+ * @param {string} plantumlCode - The PlantUML code
+ * @returns {string} - SHA-256 hash (hex string)
+ */
+function generateHash(plantumlCode) {
+  return crypto
+    .createHash("sha256")
+    .update(plantumlCode, "utf8")
+    .digest("hex");
+}
+
+/**
  * Saves image data to file and returns the filename
  * @param {Buffer} imageData - Image data as buffer
  * @param {string} outputDir - Output directory
  * @param {string} format - Image format (png/svg)
- * @param {string} encodedCode - Encoded PlantUML code for filename
+ * @param {string} plantumlCode - The PlantUML code for hash generation
  * @returns {Promise<string>} - Filename only
  */
-async function saveImageToFile(imageData, outputDir, format, encodedCode) {
+async function saveImageToFile(imageData, outputDir, format, plantumlCode) {
   await fs.ensureDir(outputDir);
-  const filename = `plantuml-${encodedCode.substring(0, 8)}.${format}`;
+  const hash = generateHash(plantumlCode);
+  const filename = `plantuml-${hash}.${format}`;
   const filePath = path.join(outputDir, filename);
+
+  // Check if file already exists (cache check)
+  if (await fs.pathExists(filePath)) {
+    console.log(`📁 PlantUML diagram already exists: ${filePath} (cache hit)`);
+    return filename;
+  }
+
   await fs.writeFile(filePath, imageData);
   console.log(`📁 PlantUML diagram saved: ${filePath} (${(imageData.length / 1024).toFixed(1)} KB)`);
   return filename;
@@ -134,8 +155,7 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
             console.log(`🎨 PlantUML SVG inlined (${(svgContent.length / 1024).toFixed(1)} KB)`);
           } else {
             // Save to file and create image node
-            const encoded = plantumlEncoder.encode(processedCode);
-            const filename = await saveImageToFile(imageData, options.outputDir, options.outputFormat, encoded);
+            const filename = await saveImageToFile(imageData, options.outputDir, options.outputFormat, processedCode);
 
             // Construct the URL as urlPrefix + filename, ensuring no double slashes
             let url = options.urlPrefix.endsWith("/") ? options.urlPrefix : options.urlPrefix + "/";
