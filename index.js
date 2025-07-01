@@ -2,7 +2,6 @@ const visit = require("unist-util-visit");
 const plantumlEncoder = require("plantuml-encoder");
 const fs = require("fs-extra");
 const path = require("path");
-const fetch = require("node-fetch");
 
 const DEFAULT_OPTIONS = {
   baseUrl: "https://www.plantuml.com/plantuml",
@@ -23,7 +22,8 @@ async function fetchPlantUMLImage(plantumlCode, options) {
   const url = `${options.baseUrl}/${options.outputFormat}/${encoded}`;
 
   try {
-    const response = await fetch(url);
+    const fetchImpl = options.fetch || require("node-fetch");
+    const response = await fetchImpl(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch PlantUML image: ${response.status} ${response.statusText}`);
     }
@@ -84,7 +84,8 @@ async function saveImageToFile(imageData, outputDir, format, encodedCode) {
   const filePath = path.join(outputDir, filename);
   await fs.writeFile(filePath, imageData);
   console.log(`📁 PlantUML diagram saved: ${filePath} (${(imageData.length / 1024).toFixed(1)} KB)`);
-  return filePath;
+  // Return a relative path with leading './' for markdown compatibility
+  return `./${path.join(outputDir, filename)}`;
 }
 
 /**
@@ -112,7 +113,7 @@ function createInlineSvgNode(svgContent, alt) {
 function remarkSimplePlantumlPlugin(pluginOptions) {
   const options = { ...DEFAULT_OPTIONS, ...pluginOptions };
 
-  return function transformer(syntaxTree) {
+  return async function transformer(syntaxTree) {
     const promises = [];
 
     visit(syntaxTree, "code", (node, index, parent) => {
@@ -136,18 +137,38 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
             const encoded = plantumlEncoder.encode(processedCode);
             const filePath = await saveImageToFile(imageData, options.outputDir, options.outputFormat, encoded);
 
-            // Create image node
-            const newNode = {
+            // Create image node directly (no paragraph wrapper needed for remark-rehype)
+            const imageNode = {
               type: "image",
-              url: filePath,
+              url: filePath.startsWith("./") ? filePath.replace(/^\./, "") : filePath,
               alt: meta,
               title: meta
             };
-            parent.children[index] = newNode;
+
+            parent.children[index] = imageNode;
+
+            // Debug: log the node structure
+            console.log("DEBUG - Created node:", JSON.stringify(imageNode, null, 2));
           }
         } catch (error) {
           console.error(`Error processing PlantUML code: ${error.message}`);
-          // Keep original code block if processing fails
+          // On error, insert a link to the PlantUML image with encoded content
+          const encoded = plantumlEncoder.encode(processedCode);
+          const imageUrl = `${options.baseUrl}/${options.outputFormat}/${encoded}`;
+          const linkNode = {
+            type: "paragraph",
+            children: [
+              {
+                type: "link",
+                url: imageUrl,
+                title: meta,
+                children: [
+                  { type: "text", value: meta || "PlantUML diagram" }
+                ]
+              }
+            ]
+          };
+          parent.children[index] = linkNode;
         }
       });
 
@@ -156,7 +177,7 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
 
     // Wait for all async operations to complete
     if (promises.length > 0) {
-      return Promise.all(promises).then(() => syntaxTree);
+      await Promise.all(promises);
     }
 
     return syntaxTree;
