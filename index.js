@@ -45,6 +45,8 @@ async function fetchPlantUMLImage(plantumlCode, options) {
 async function processIncludes(plantumlCode, basePath) {
   let processedCode = plantumlCode;
 
+  console.log("Processing includes in:", plantumlCode);
+
   // Process !include directives
   const includeRegex = /!include\s+(.+)$/gm;
   let match;
@@ -57,13 +59,21 @@ async function processIncludes(plantumlCode, basePath) {
       try {
         const fullPath = path.resolve(basePath, includePath);
         const includedContent = await fs.readFile(fullPath, "utf8");
+        console.log("Included content:", includedContent);
 
         // Recursively process includes in the included file
         const processedIncludedContent = await processIncludes(includedContent, path.dirname(fullPath));
 
-        // Replace the include directive with the file content
-        processedCode = processedCode.replace(match[0], processedIncludedContent);
+        // Clean @startuml and @enduml directives from included content
+        const cleanedContent = processedIncludedContent
+          .replace(/^\s*@startuml\s*$/gm, "") // Remove @startuml lines
+          .replace(/^\s*@enduml\s*$/gm, "") // Remove @enduml lines
+          .trim(); // Remove extra whitespace
+
+        // Replace the include directive with the cleaned file content
+        processedCode = processedCode.replace(match[0], cleanedContent);
         console.log(`📄 PlantUML include processed: ${includePath}`);
+        console.log("Processed code:", processedCode);
       } catch (error) {
         console.error(`Error processing include ${includePath}: ${error.message}`);
         // Keep the original include directive if file can't be read
@@ -86,8 +96,14 @@ async function processIncludes(plantumlCode, basePath) {
         // Recursively process includes in the included file
         const processedIncludedContent = await processIncludes(includedContent, path.dirname(fullPath));
 
-        // Replace the include directive with the file content
-        processedCode = processedCode.replace(match[0], processedIncludedContent);
+        // Clean @startuml and @enduml directives from included content
+        const cleanedContent = processedIncludedContent
+          .replace(/^\s*@startuml\s*$/gm, "") // Remove @startuml lines
+          .replace(/^\s*@enduml\s*$/gm, "") // Remove @enduml lines
+          .trim(); // Remove extra whitespace
+
+        // Replace the include directive with the cleaned file content
+        processedCode = processedCode.replace(match[0], cleanedContent);
         console.log(`📄 PlantUML include processed: ${includePath}`);
       } catch (error) {
         console.error(`Error processing include ${includePath}: ${error.message}`);
@@ -126,8 +142,9 @@ async function saveImageToFile(imageData, outputDir, format, plantumlCode) {
   const filePath = path.join(outputDir, filename);
 
   // Check if file already exists (cache check)
+  console.log(`🔍 Checking cache for: ${filename}`);
   if (await fs.pathExists(filePath)) {
-    console.log(`📁 PlantUML diagram already exists: ${filePath} (cache hit)`);
+    console.log(`✅ Cache hit! Using existing file: ${filePath}`);
     return filename;
   }
 
