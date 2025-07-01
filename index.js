@@ -43,11 +43,38 @@ async function fetchPlantUMLImage(plantumlCode, options) {
  * @returns {Promise<string>} - Processed PlantUML code
  */
 async function processIncludes(plantumlCode, basePath) {
-  const includeRegex = /!include\s+(.+)$/gm;
   let processedCode = plantumlCode;
+
+  // Process !include directives
+  const includeRegex = /!include\s+(.+)$/gm;
   let match;
 
   while ((match = includeRegex.exec(plantumlCode)) !== null) {
+    const includePath = match[1].trim();
+
+    // Check if it's a .puml file
+    if (includePath.endsWith(".puml")) {
+      try {
+        const fullPath = path.resolve(basePath, includePath);
+        const includedContent = await fs.readFile(fullPath, "utf8");
+
+        // Recursively process includes in the included file
+        const processedIncludedContent = await processIncludes(includedContent, path.dirname(fullPath));
+
+        // Replace the include directive with the file content
+        processedCode = processedCode.replace(match[0], processedIncludedContent);
+        console.log(`📄 PlantUML include processed: ${includePath}`);
+      } catch (error) {
+        console.error(`Error processing include ${includePath}: ${error.message}`);
+        // Keep the original include directive if file can't be read
+      }
+    }
+  }
+
+  // Process ::include{file=...} directives
+  const includeFileRegex = /::include\{file=([^}]+)\}/gm;
+
+  while ((match = includeFileRegex.exec(processedCode)) !== null) {
     const includePath = match[1].trim();
 
     // Check if it's a .puml file

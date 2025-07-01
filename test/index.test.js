@@ -347,4 +347,64 @@ describe("Plugin", () => {
     chai.assert.equal(urlMatch1[1], urlMatch2[1], "Both outputs should have the same image URL");
     chai.assert.include(urlMatch1[1], "plantuml-", "URL should contain plantuml- prefix");
   });
+
+  it("should process ::include{file=...} directives for .puml files", async () => {
+    // Mock fetch to return a PNG buffer
+    const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const fetchImpl = async () => ({ ok: true, buffer: async () => fakePng });
+
+    const input = fs.readFileSync(path.resolve(__dirname, "./resources/source-with-include-file.md")).toString();
+
+    const output = await remark()
+      .use(plugin, {
+        outputFormat: "png",
+        outputDir: "./test/static",
+        includePath: path.resolve(__dirname, "./resources"),
+        inlineSvg: false,
+        fetch: fetchImpl
+      })
+      .process(input);
+
+    // Check that the output contains image references
+    chai.assert.include(output.toString(), "![");
+    chai.assert.include(output.toString(), "plantuml-");
+  });
+
+  it("should send actual included file content to PlantUML server, not include directives (for !include)", async () => {
+    // Mock fetch to capture the encoded content being sent
+    let capturedEncodedContent = null;
+    const fetchImpl = async (url) => {
+      // Extract the encoded content from the URL
+      const match = url.match(/plantuml\/png\/(.+)$/);
+      if (match) {
+        capturedEncodedContent = match[1];
+      }
+      return { ok: true, buffer: async () => Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) };
+    };
+
+    const input = fs.readFileSync(path.resolve(__dirname, "./resources/source-with-include.md")).toString();
+
+    await remark()
+      .use(plugin, {
+        outputFormat: "png",
+        outputDir: "./test/static",
+        includePath: path.resolve(__dirname, "./resources"),
+        inlineSvg: false,
+        fetch: fetchImpl
+      })
+      .process(input);
+
+    // Verify that the encoded content was captured
+    chai.assert(capturedEncodedContent, "Should have captured encoded content from fetch URL");
+
+    // Decode the content to verify it contains the actual included file content
+    const plantumlEncoder = require("plantuml-encoder");
+    const decodedContent = plantumlEncoder.decode(capturedEncodedContent);
+
+    // Should contain the actual content from included-diagram.puml, not the include directive
+    chai.assert.include(decodedContent, "class IncludedDiagram", "Decoded content should contain actual included file content");
+    chai.assert.include(decodedContent, "process(): void", "Decoded content should contain actual included file content");
+    chai.assert.notInclude(decodedContent, "!include", "Decoded content should not contain include directives");
+    chai.assert.notInclude(decodedContent, "::include", "Decoded content should not contain include directives");
+  });
 });
