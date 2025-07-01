@@ -176,21 +176,16 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
           }
         } catch (error) {
           console.error(`Error processing PlantUML code: ${error.message}`);
-          // On error, insert a link to the PlantUML image with encoded content
+          // On error, insert an image node with the PlantUML image URL as src
           const encoded = plantumlEncoder.encode(processedCode);
           const imageUrl = `${options.baseUrl}/${options.outputFormat}/${encoded}`;
-          const linkNode = {
-            type: "paragraph",
-            children: [
-              {
-                type: "link",
-                url: imageUrl,
-                title: meta,
-                children: [{ type: "text", value: meta || "PlantUML diagram" }]
-              }
-            ]
+          const imageNode = {
+            type: "image",
+            url: imageUrl,
+            alt: meta,
+            title: meta
           };
-          parent.children[index] = linkNode;
+          parent.children[index] = imageNode;
         }
       });
 

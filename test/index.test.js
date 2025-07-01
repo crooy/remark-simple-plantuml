@@ -178,7 +178,7 @@ describe("Plugin", () => {
     chai.assert.include(htmlOutput, "plantuml-", "HTML output should contain the generated PNG filename");
   });
 
-  it("should handle errors gracefully and keep original code blocks", async () => {
+  it("should handle errors gracefully and output fallback image", async () => {
     // Mock fetch to always throw
     const fetchImpl = async () => {
       throw new Error("Simulated network error");
@@ -191,25 +191,30 @@ describe("Plugin", () => {
     console.error = () => {}; // Suppress error output
 
     try {
-      const output = await remark()
+      const output = await unified()
+        .use(remarkParse)
         .use(plugin, {
           outputFormat: "png",
           outputDir: "./test/static",
           inlineSvg: false,
           fetch: fetchImpl
         })
+        .use(remarkRehype, { allowDangerousHtml: true })
+        .use(html, { allowDangerousHtml: true })
         .process(input);
 
-      // Should output a fallback link if processing fails
-      chai.assert.include(output.toString(), "PlantUML diagram");
-      chai.assert.include(output.toString(), "https://www.plantuml.com/plantuml/png/");
+      const htmlOutput = output.toString();
+
+      // Should output a fallback image tag if processing fails
+      chai.assert.include(htmlOutput, "<img", "HTML output should contain an <img> tag");
+      chai.assert.include(htmlOutput, "https://www.plantuml.com/plantuml/png/", "HTML output should contain PlantUML server URL");
     } finally {
       // Restore console.error
       console.error = originalConsoleError;
     }
   });
 
-  it("should fallback to PlantUML image link if server is unavailable", async () => {
+  it("should fallback to PlantUML image if server is unavailable", async () => {
     // Mock fetch to always throw
     const fetchImpl = async () => {
       throw new Error("Simulated network error");
@@ -224,15 +229,19 @@ describe("Plugin", () => {
         inlineSvg: false,
         fetch: fetchImpl
       })
-      .use(remarkRehype)
-      .use(html)
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(html, { allowDangerousHtml: true })
       .process(testInput);
 
     const htmlOutput = output.toString();
 
+    // Should contain an img tag with PlantUML server URL
+    chai.assert.include(htmlOutput, "<img", "HTML output should contain an <img> tag");
+    chai.assert.include(htmlOutput, "https://www.plantuml.com/plantuml/png/", "HTML output should contain PlantUML server URL");
+
     // Use regex to extract the fallback URL
     const match = htmlOutput.match(/https:\/\/www\.plantuml\.com\/plantuml\/png\/([^"]+)/);
-    chai.assert(match, "HTML output should contain a fallback PlantUML image link");
+    chai.assert(match, "HTML output should contain a fallback PlantUML image URL");
     const fallbackUrl = match[1];
     chai.assert.isString(fallbackUrl);
     chai.assert.isAbove(fallbackUrl.length, 10, "Encoded PlantUML string should be present in fallback URL");
