@@ -26,7 +26,6 @@ jobs:
         run: npm run lint
 
       - name: Publish to npm
-        uses: npm/publish-action@v1
-        with:
-          token: ${{ secrets.NPM_TOKEN }}
-          access: public
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

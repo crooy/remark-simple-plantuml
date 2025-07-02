@@ -153,19 +153,7 @@ async function saveImageToFile(imageData, outputDir, format, plantumlCode) {
   return filename;
 }
 
-/**
- * Creates an inline SVG node from SVG content
- * @param {string} svgContent - SVG content as string
- * @param {string} alt - Alt text
- * @returns {Object} - AST node for inline SVG
- */
-function createInlineSvgNode(svgContent, alt) {
-  const titleAttr = alt ? ` title="${alt}"` : "";
-  return {
-    type: "html",
-    value: `<div class="plantuml-diagram"${titleAttr}>${svgContent}</div>`
-  };
-}
+
 
 /**
  * Plugin for remark-js
@@ -188,30 +176,23 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
       // Process includes in PlantUML code
       const processPromise = processIncludes(value, options.includePath).then(async processedCode => {
         try {
-          // Fetch the image
-          const imageData = await fetchPlantUMLImage(processedCode, options);
 
           if (options.inlineImage) {
-            if (options.outputFormat === "svg") {
-              // Create inline SVG node
-              const svgContent = imageData.toString("utf8");
-              const newNode = createInlineSvgNode(svgContent, meta);
-              parent.children[index] = newNode;
-              console.log(`🎨 PlantUML SVG inlined (${(svgContent.length / 1024).toFixed(1)} KB)`);
-            } else {
-              // Create inline PNG node with PlantUML server URL
-              const encoded = plantumlEncoder.encode(processedCode);
-              const imageUrl = `${options.baseUrl}/${options.outputFormat}/${encoded}`;
-              const imageNode = {
-                type: "image",
-                url: imageUrl,
-                alt: meta,
-                title: meta
-              };
-              parent.children[index] = imageNode;
-              console.log(`🖼️ PlantUML PNG inlined as server URL: ${imageUrl}`);
-            }
+            // Create inline image node with PlantUML server URL for both SVG and PNG
+            const encoded = plantumlEncoder.encode(processedCode);
+            const imageUrl = `${options.baseUrl}/${options.outputFormat}/${encoded}`;
+            const imageNode = {
+              type: "image",
+              url: imageUrl,
+              alt: meta,
+              title: meta
+            };
+            parent.children[index] = imageNode;
+            console.log(`🖼️ PlantUML ${options.outputFormat.toUpperCase()} inlined as server URL: ${imageUrl}`);
           } else {
+            // Fetch the image
+            const imageData = await fetchPlantUMLImage(processedCode, options);
+
             // Save to file and create image node
             const filename = await saveImageToFile(imageData, options.outputDir, options.outputFormat, processedCode);
 

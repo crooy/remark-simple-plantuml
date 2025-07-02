@@ -58,10 +58,14 @@ describe("Plugin", () => {
     chai.assert.include(output.toString(), "plantuml-");
   });
 
-  it("should convert PlantUML code to inline SVG", async () => {
-    // Mock fetch to return a fake SVG buffer
+  it("should convert PlantUML code to inline SVG (PlantUML server URL)", async () => {
+    // Mock fetch to return a fake SVG buffer (should not be used for inlineImage: true)
     const fakeSvg = Buffer.from('<svg><rect width="100" height="100"/></svg>', "utf8");
-    const fetchImpl = async () => ({ ok: true, buffer: async () => fakeSvg });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      return { ok: true, buffer: async () => fakeSvg };
+    };
 
     const input = fs.readFileSync(path.resolve(__dirname, "./resources/source.md")).toString();
 
@@ -74,9 +78,12 @@ describe("Plugin", () => {
       })
       .process(input);
 
-    // Check that the output contains inline SVG
-    chai.assert.include(output.toString(), '<div class="plantuml-diagram">');
-    chai.assert.include(output.toString(), "<svg");
+    // Should contain an image node with a PlantUML server URL
+    const outStr = output.toString();
+    chai.assert.include(outStr, "![", "Should contain a markdown image node");
+    chai.assert.include(outStr, "https://www.plantuml.com/plantuml/svg/", "Should use PlantUML server URL for SVG");
+    chai.assert.notInclude(outStr, "plantuml-", "Should not reference a local file");
+    chai.assert.isFalse(fetchCalled, "Fetch should not be called when inlineImage is true");
   });
 
   it("should process include directives for .puml files", async () => {
@@ -411,7 +418,11 @@ describe("Plugin", () => {
   it("should convert PlantUML code to inline PNG (PlantUML server URL)", async () => {
     // Mock fetch to return a PNG buffer (should not be used for inlineImage: true)
     const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-    const fetchImpl = async () => ({ ok: true, buffer: async () => fakePng });
+    let fetchCalled = false;
+    const fetchImpl = async () => {
+      fetchCalled = true;
+      return { ok: true, buffer: async () => fakePng };
+    };
 
     const input = [
       '```plantuml',
@@ -435,5 +446,6 @@ describe("Plugin", () => {
     chai.assert.include(outStr, "![", "Should contain a markdown image node");
     chai.assert.include(outStr, "https://www.plantuml.com/plantuml/png/", "Should use PlantUML server URL for PNG");
     chai.assert.notInclude(outStr, "plantuml-", "Should not reference a local file");
+    chai.assert.isFalse(fetchCalled, "Fetch should not be called when inlineImage is true");
   });
 });
