@@ -1,5 +1,6 @@
 const chai = require("chai");
 const fs = require("fs");
+const fsExtra = require("fs-extra");
 const path = require("path");
 const { unified } = require("unified");
 const { remark } = require("remark");
@@ -9,6 +10,34 @@ const html = require("rehype-stringify").default;
 const plugin = require("../index");
 const plantumlEncoder = require("plantuml-encoder");
 const proxyquire = require("proxyquire");
+
+async function cleanupPngFiles(dir = path.resolve(__dirname, "./static")) {
+  try {
+    // Remove all PNG files recursively in the directory
+    console.log(`Cleaning up PNG files in: ${dir}`);
+
+    if (await fsExtra.pathExists(dir)) {
+      const items = await fsExtra.readdir(dir);
+      for (const item of items) {
+        console.log(`Item: ${item}`);
+        const itemPath = path.join(dir, item);
+        const stats = await fsExtra.stat(itemPath);
+
+        if (stats.isDirectory()) {
+          // Recursively clean subdirectories
+          await cleanupPngFiles(itemPath);
+        } else if (item.endsWith(".png") && item.startsWith("plantuml-")) {
+          // Remove PNG files
+          console.log(`Removing PNG file: ${itemPath}`);
+          await fsExtra.remove(itemPath);
+        }
+      }
+    }
+  } catch (error) {
+    // Directory doesn't exist, which is fine
+    console.log(`Error cleaning up: ${error.message}`);
+  }
+}
 
 // Minimal test plugin to verify unified pipeline works
 function minimalTestPlugin() {
@@ -25,9 +54,7 @@ function directTransformer(tree) {
 }
 
 describe("Plugin", () => {
-  beforeEach(function() {
-    this.timeout(10000);
-  });
+  // Helper function to clean up PNG files
 
   // Helper: create a plugin with a mocked fetch
   function getPluginWithMockedFetch(fetchImpl) {
@@ -214,7 +241,11 @@ describe("Plugin", () => {
 
       // Should output a fallback image tag if processing fails
       chai.assert.include(htmlOutput, "<img", "HTML output should contain an <img> tag");
-      chai.assert.include(htmlOutput, "https://www.plantuml.com/plantuml/png/", "HTML output should contain PlantUML server URL");
+      chai.assert.include(
+        htmlOutput,
+        "https://www.plantuml.com/plantuml/png/",
+        "HTML output should contain PlantUML server URL"
+      );
     } finally {
       // Restore console.error
       console.error = originalConsoleError;
@@ -244,7 +275,11 @@ describe("Plugin", () => {
 
     // Should contain an img tag with PlantUML server URL
     chai.assert.include(htmlOutput, "<img", "HTML output should contain an <img> tag");
-    chai.assert.include(htmlOutput, "https://www.plantuml.com/plantuml/png/", "HTML output should contain PlantUML server URL");
+    chai.assert.include(
+      htmlOutput,
+      "https://www.plantuml.com/plantuml/png/",
+      "HTML output should contain PlantUML server URL"
+    );
 
     // Use regex to extract the fallback URL
     const match = htmlOutput.match(/https:\/\/www\.plantuml\.com\/plantuml\/png\/([^"]+)/);
@@ -293,7 +328,7 @@ describe("Plugin", () => {
       .use(plugin, {
         outputFormat: "png",
         outputDir: "./test/static",
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .use(remarkRehype, { allowDangerousHtml: true })
@@ -322,7 +357,7 @@ describe("Plugin", () => {
       .use(plugin, {
         outputFormat: "png",
         outputDir: "./test/static",
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .use(remarkRehype, { allowDangerousHtml: true })
@@ -335,7 +370,7 @@ describe("Plugin", () => {
       .use(plugin, {
         outputFormat: "png",
         outputDir: "./test/static",
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .use(remarkRehype, { allowDangerousHtml: true })
@@ -367,7 +402,7 @@ describe("Plugin", () => {
         outputFormat: "png",
         outputDir: "./test/static",
         includePath: path.resolve(__dirname, "./resources"),
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .process(input);
@@ -378,10 +413,13 @@ describe("Plugin", () => {
   });
 
   it("should send actual included file content to PlantUML server, not include directives (for !include)", async () => {
+    await cleanupPngFiles();
     // Mock fetch to capture the encoded content being sent
     let capturedEncodedContent = null;
-    const fetchImpl = async (url) => {
+    let fetchCalled = false;
+    const fetchImpl = async url => {
       // Extract the encoded content from the URL
+      fetchCalled = true;
       const match = url.match(/plantuml\/png\/(.+)$/);
       if (match) {
         capturedEncodedContent = match[1];
@@ -396,12 +434,13 @@ describe("Plugin", () => {
         outputFormat: "png",
         outputDir: "./test/static",
         includePath: path.resolve(__dirname, "./resources"),
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .process(input);
 
     // Verify that the encoded content was captured
+    chai.assert.isTrue(fetchCalled, "Fetch should be called when inlineImage is false");
     chai.assert(capturedEncodedContent, "Should have captured encoded content from fetch URL");
 
     // Decode the content to verify it contains the actual included file content
@@ -409,13 +448,22 @@ describe("Plugin", () => {
     const decodedContent = plantumlEncoder.decode(capturedEncodedContent);
 
     // Should contain the actual content from included-diagram.puml, not the include directive
-    chai.assert.include(decodedContent, "class IncludedDiagram", "Decoded content should contain actual included file content");
-    chai.assert.include(decodedContent, "process(): void", "Decoded content should contain actual included file content");
+    chai.assert.include(
+      decodedContent,
+      "class IncludedDiagram",
+      "Decoded content should contain actual included file content"
+    );
+    chai.assert.include(
+      decodedContent,
+      "process(): void",
+      "Decoded content should contain actual included file content"
+    );
     chai.assert.notInclude(decodedContent, "!include", "Decoded content should not contain include directives");
     chai.assert.notInclude(decodedContent, "::include", "Decoded content should not contain include directives");
   });
 
   it("should convert PlantUML code to inline PNG (PlantUML server URL)", async () => {
+    await cleanupPngFiles();
     // Mock fetch to return a PNG buffer (should not be used for inlineImage: true)
     const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     let fetchCalled = false;
@@ -424,13 +472,7 @@ describe("Plugin", () => {
       return { ok: true, buffer: async () => fakePng };
     };
 
-    const input = [
-      '```plantuml',
-      'class InlinePngTest {',
-      '  + test(): void',
-      '}',
-      '```'
-    ].join("\n");
+    const input = ["```plantuml", "class InlinePngTest {", "  + test(): void", "}", "```"].join("\n");
 
     const output = await remark()
       .use(plugin, {

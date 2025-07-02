@@ -128,32 +128,50 @@ function generateHash(plantumlCode) {
 }
 
 /**
- * Saves image data to file and returns the filename
- * @param {Buffer} imageData - Image data as buffer
- * @param {string} outputDir - Output directory
+ * Converts PlantUML code to a filename
+ * @param {string} plantumlCode - The PlantUML code
  * @param {string} format - Image format (png/svg)
- * @param {string} plantumlCode - The PlantUML code for hash generation
- * @returns {Promise<string>} - Filename only
+ * @returns {string} - Filename
  */
-async function saveImageToFile(imageData, outputDir, format, plantumlCode) {
-  await fs.ensureDir(outputDir);
+function plantumlToFilename(plantumlCode, format) {
   const hash = generateHash(plantumlCode);
-  const filename = `plantuml-${hash}.${format}`;
+  return `plantuml-${hash}.${format}`;
+}
+
+/**
+ * Checks if a cached image file exists and returns the filename if it does
+ * @param {string} outputDir - Output directory
+ * @param {string} filename - The filename to check
+ * @returns {Promise<string|null>} - Filename if cached, null if not
+ */
+async function checkCache(outputDir, filename) {
+  await fs.ensureDir(outputDir);
   const filePath = path.join(outputDir, filename);
 
-  // Check if file already exists (cache check)
   console.log(`🔍 Checking cache for: ${filename}`);
   if (await fs.pathExists(filePath)) {
     console.log(`✅ Cache hit! Using existing file: ${filePath}`);
     return filename;
   }
 
+  console.log(`❌ Cache miss for: ${filename}`);
+  return null;
+}
+
+/**
+ * Saves image data to file and returns the filename
+ * @param {Buffer} imageData - Image data as buffer
+ * @param {string} outputDir - Output directory
+ * @param {string} filename - The filename to save
+ * @returns {Promise<string>} - Filename only
+ */
+async function saveImageToFile(imageData, outputDir, filename) {
+  const filePath = path.join(outputDir, filename);
+
   await fs.writeFile(filePath, imageData);
   console.log(`📁 PlantUML diagram saved: ${filePath} (${(imageData.length / 1024).toFixed(1)} KB)`);
   return filename;
 }
-
-
 
 /**
  * Plugin for remark-js
@@ -176,8 +194,7 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
       // Process includes in PlantUML code
       const processPromise = processIncludes(value, options.includePath).then(async processedCode => {
         try {
-
-          if (options.inlineImage) {
+          if (options.inlineImage === true) {
             // Create inline image node with PlantUML server URL for both SVG and PNG
             const encoded = plantumlEncoder.encode(processedCode);
             const imageUrl = `${options.baseUrl}/${options.outputFormat}/${encoded}`;
@@ -190,11 +207,17 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
             parent.children[index] = imageNode;
             console.log(`🖼️ PlantUML ${options.outputFormat.toUpperCase()} inlined as server URL: ${imageUrl}`);
           } else {
-            // Fetch the image
-            const imageData = await fetchPlantUMLImage(processedCode, options);
+            // Generate filename from PlantUML code
+            const filename = plantumlToFilename(processedCode, options.outputFormat);
 
-            // Save to file and create image node
-            const filename = await saveImageToFile(imageData, options.outputDir, options.outputFormat, processedCode);
+            // Check cache first
+            const cachedFilename = await checkCache(options.outputDir, filename);
+
+            if (!cachedFilename) {
+              // Fetch the image and save to file
+              const imageData = await fetchPlantUMLImage(processedCode, options);
+              await saveImageToFile(imageData, options.outputDir, filename);
+            }
 
             // Construct the URL as urlPrefix + filename, ensuring no double slashes
             let url = options.urlPrefix.endsWith("/") ? options.urlPrefix : options.urlPrefix + "/";
