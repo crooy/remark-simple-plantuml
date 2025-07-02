@@ -60,7 +60,7 @@ const options = {
   baseUrl: "https://www.plantuml.com/plantuml", // PlantUML server URL
   outputFormat: "png", // "png" or "svg"
   outputDir: "./static", // Directory to store generated images
-  inlineSvg: true, // Whether to inline SVG content (only applies when outputFormat is "svg")
+  inlineImage: false, // Whether to inline images (SVG as HTML, PNG as PlantUML server URLs)
   includePath: "./", // Base path for resolving included .puml files
   urlPrefix: "/" // URL prefix to replace "./" in generated image URLs
 };
@@ -73,7 +73,7 @@ remark().use(simplePlantUML, options).process(input);
 - **baseUrl**: The PlantUML server URL (default: `https://www.plantuml.com/plantuml`)
 - **outputFormat**: Output format for diagrams - `"png"` or `"svg"` (default: `"png"`)
 - **outputDir**: Directory where generated images will be stored (default: `"./static"`)
-- **inlineSvg**: When `outputFormat` is `"svg"`, whether to inline the SVG content in HTML or save as files (default: `true`)
+- **inlineImage**: When `true`, inlines images instead of creating local files. SVG content is inlined as HTML, PNG images use PlantUML server URLs (default: `false`)
 - **includePath**: Base path for resolving `!include` directives in PlantUML code (default: `"./"`)
 - **urlPrefix**: URL prefix to replace `"./"` in generated image URLs (default: `"/"`)
 

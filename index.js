@@ -8,7 +8,7 @@ const DEFAULT_OPTIONS = {
   baseUrl: "https://www.plantuml.com/plantuml",
   outputFormat: "png", // "png" or "svg"
   outputDir: "./static", // Directory to store generated images
-  inlineSvg: true, // Whether to inline SVG content
+  inlineImage: false, // Whether to inline images (SVG as HTML, PNG as PlantUML server URLs)
   includePath: "./", // Base path for resolving included .puml files
   urlPrefix: "/" // URL prefix to replace "./" in generated image URLs
 };
@@ -191,12 +191,26 @@ function remarkSimplePlantumlPlugin(pluginOptions) {
           // Fetch the image
           const imageData = await fetchPlantUMLImage(processedCode, options);
 
-          if (options.outputFormat === "svg" && options.inlineSvg) {
-            // Create inline SVG node
-            const svgContent = imageData.toString("utf8");
-            const newNode = createInlineSvgNode(svgContent, meta);
-            parent.children[index] = newNode;
-            console.log(`🎨 PlantUML SVG inlined (${(svgContent.length / 1024).toFixed(1)} KB)`);
+          if (options.inlineImage) {
+            if (options.outputFormat === "svg") {
+              // Create inline SVG node
+              const svgContent = imageData.toString("utf8");
+              const newNode = createInlineSvgNode(svgContent, meta);
+              parent.children[index] = newNode;
+              console.log(`🎨 PlantUML SVG inlined (${(svgContent.length / 1024).toFixed(1)} KB)`);
+            } else {
+              // Create inline PNG node with PlantUML server URL
+              const encoded = plantumlEncoder.encode(processedCode);
+              const imageUrl = `${options.baseUrl}/${options.outputFormat}/${encoded}`;
+              const imageNode = {
+                type: "image",
+                url: imageUrl,
+                alt: meta,
+                title: meta
+              };
+              parent.children[index] = imageNode;
+              console.log(`🖼️ PlantUML PNG inlined as server URL: ${imageUrl}`);
+            }
           } else {
             // Save to file and create image node
             const filename = await saveImageToFile(imageData, options.outputDir, options.outputFormat, processedCode);

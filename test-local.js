@@ -33,7 +33,7 @@ class MainClass {
         outputFormat: "png",
         outputDir: "./test-output",
         includePath: "./test/resources",
-        inlineSvg: false
+        inlineImage: false
       })
       .process(testMarkdown);
 
@@ -48,7 +48,7 @@ class MainClass {
         outputFormat: "svg",
         outputDir: "./test-output",
         includePath: "./test/resources",
-        inlineSvg: true
+        inlineImage: true
       })
       .process(testMarkdown);
 

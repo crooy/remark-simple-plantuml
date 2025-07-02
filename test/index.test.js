@@ -48,7 +48,7 @@ describe("Plugin", () => {
       .use(plugin, {
         outputFormat: "png",
         outputDir: "./test/static",
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .process(input);
@@ -69,7 +69,7 @@ describe("Plugin", () => {
       .use(plugin, {
         outputFormat: "svg",
         outputDir: "./test/static",
-        inlineSvg: true,
+        inlineImage: true,
         fetch: fetchImpl
       })
       .process(input);
@@ -91,7 +91,7 @@ describe("Plugin", () => {
         outputFormat: "png",
         outputDir: "./test/static",
         includePath: path.resolve(__dirname, "./resources"),
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .process(input);
@@ -155,7 +155,7 @@ describe("Plugin", () => {
       .use(plugin, {
         outputFormat: "png",
         outputDir: "./test/static",
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .use(remarkRehype, { allowDangerousHtml: true })
@@ -196,7 +196,7 @@ describe("Plugin", () => {
         .use(plugin, {
           outputFormat: "png",
           outputDir: "./test/static",
-          inlineSvg: false,
+          inlineImage: false,
           fetch: fetchImpl
         })
         .use(remarkRehype, { allowDangerousHtml: true })
@@ -226,7 +226,7 @@ describe("Plugin", () => {
       .use(plugin, {
         outputFormat: "png",
         outputDir: "./test/static",
-        inlineSvg: false,
+        inlineImage: false,
         fetch: fetchImpl
       })
       .use(remarkRehype, { allowDangerousHtml: true })
@@ -259,7 +259,7 @@ describe("Plugin", () => {
       .use(plugin, {
         outputFormat: "png",
         outputDir: "./test/static",
-        inlineSvg: false,
+        inlineImage: false,
         urlPrefix: "/assets/images/",
         fetch: fetchImpl
       })
@@ -406,5 +406,34 @@ describe("Plugin", () => {
     chai.assert.include(decodedContent, "process(): void", "Decoded content should contain actual included file content");
     chai.assert.notInclude(decodedContent, "!include", "Decoded content should not contain include directives");
     chai.assert.notInclude(decodedContent, "::include", "Decoded content should not contain include directives");
+  });
+
+  it("should convert PlantUML code to inline PNG (PlantUML server URL)", async () => {
+    // Mock fetch to return a PNG buffer (should not be used for inlineImage: true)
+    const fakePng = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const fetchImpl = async () => ({ ok: true, buffer: async () => fakePng });
+
+    const input = [
+      '```plantuml',
+      'class InlinePngTest {',
+      '  + test(): void',
+      '}',
+      '```'
+    ].join("\n");
+
+    const output = await remark()
+      .use(plugin, {
+        outputFormat: "png",
+        outputDir: "./test/static",
+        inlineImage: true,
+        fetch: fetchImpl
+      })
+      .process(input);
+
+    // Should contain an image node with a PlantUML server URL
+    const outStr = output.toString();
+    chai.assert.include(outStr, "![", "Should contain a markdown image node");
+    chai.assert.include(outStr, "https://www.plantuml.com/plantuml/png/", "Should use PlantUML server URL for PNG");
+    chai.assert.notInclude(outStr, "plantuml-", "Should not reference a local file");
   });
 });
